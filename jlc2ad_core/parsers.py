@@ -400,10 +400,11 @@ class SchematicParser:
     def _parse_arc_path(self, p, ox, oy) -> Optional[SchArc]:
         if len(p) < 2:
             return None
-        path = p[1]
-        m = re.match(
-            r'M\s*([\d.\-]+)\s+([\d.\-]+)\s+A\s*([\d.\-]+)\s+([\d.\-]+)\s+0\s+([01])\s+([01])\s+([\d.\-]+)\s+([\d.\-]+)',
+        path = p[1].replace(',', ' ')
+        m = re.search(
+            r'M\s*([\d.\-]+)\s+([\d.\-]+)\s+A\s*([\d.\-]+)\s+([\d.\-]+)\s+[\d.\-]+\s+([01])\s+([01])\s+([\d.\-]+)\s+([\d.\-]+)',
             path,
+            flags=re.IGNORECASE,
         )
         if not m:
             return None

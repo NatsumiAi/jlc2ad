@@ -7,6 +7,19 @@ from typing import List
 
 from .types import PCB_FLAGS_UNLOCKED, Arc, Fill, Footprint, Pad, SchPin, SchSymbol, Track
 
+
+def _resource_path(filename: str) -> str:
+    """Resolve template file path in package dir or project root."""
+    module_dir = os.path.dirname(__file__)
+    candidates = [
+        os.path.join(module_dir, filename),
+        os.path.join(os.path.dirname(module_dir), filename),
+    ]
+    for path in candidates:
+        if os.path.exists(path):
+            return path
+    return candidates[-1]
+
 class RecordPacker:
 
     def _common_header(self, layer: int) -> bytearray:
@@ -290,7 +303,7 @@ def _safe_storage_name(name: str) -> str:
 
 def _load_file_header() -> bytes:
     """Load FileHeader template from RC.PcbLib."""
-    header_file = os.path.join(os.path.dirname(__file__), 'pcb_file_header.bin')
+    header_file = _resource_path('pcb_file_header.bin')
     if os.path.exists(header_file):
         with open(header_file, 'rb') as f:
             return f.read()
@@ -310,7 +323,7 @@ def _get_file_header() -> bytes:
 
 def _load_library_params() -> str:
     """Load full PCB library params template from file."""
-    params_file = os.path.join(os.path.dirname(__file__), 'pcb_library_params.txt')
+    params_file = _resource_path('pcb_library_params.txt')
     if os.path.exists(params_file):
         with open(params_file, 'r', encoding='utf-8') as f:
             return f.read()
@@ -512,7 +525,7 @@ class PcbLibWriter:
 
 def _load_sch_file_header() -> bytes:
     """Load SchLib FileHeader template from RC.SchLib."""
-    header_file = os.path.join(os.path.dirname(__file__), 'sch_file_header.bin')
+    header_file = _resource_path('sch_file_header.bin')
     if os.path.exists(header_file):
         with open(header_file, 'rb') as f:
             return f.read()
@@ -521,7 +534,7 @@ def _load_sch_file_header() -> bytes:
 
 def _load_sch_storage() -> bytes:
     """Load SchLib Storage template from RC.SchLib."""
-    storage_file = os.path.join(os.path.dirname(__file__), 'sch_storage.bin')
+    storage_file = _resource_path('sch_storage.bin')
     if os.path.exists(storage_file):
         with open(storage_file, 'rb') as f:
             return f.read()
