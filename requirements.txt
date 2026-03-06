@@ -1,0 +1,2 @@
+requests>=2.31.0
+olefile>=0.47
