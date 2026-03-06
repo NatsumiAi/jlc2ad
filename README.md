@@ -1,6 +1,8 @@
-# jlc2ad
+![jlc2ad](https://socialify.git.ci/NatsumiAi/jlc2ad/image?description=1&font=Bitter&forks=1&language=1&name=1&owner=1&pattern=Circuit+Board&pulls=1&stargazers=1&theme=Dark)
 
-> 从 LCSC / EasyEDA 一键生成 Altium Designer 元件库（`.PcbLib` + `.SchLib` + `.LibPkg`）
+# jlc2ad ✨
+
+> 🚀 从 LCSC / EasyEDA 一键生成 Altium Designer 元件库（`.PcbLib` + `.SchLib` + `.LibPkg`）
 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)
 ![Platform](https://img.shields.io/badge/Platform-Windows-0078D6?logo=windows&logoColor=white)
@@ -10,18 +12,18 @@
 
 ---
 
-## 功能亮点
+## ✨ 功能亮点
 
-- 支持多个 LCSC 料号批量生成
-- 自动生成 PCB 封装库：`.PcbLib`
-- 自动生成原理图库：`.SchLib`
-- 自动生成集成库工程：`.LibPkg`
-- 自动建立原理图符号与 PCB 封装的模型关联
-- 支持对已有库追加器件（不覆盖已有条目）
+- ✅ 支持多个 LCSC 料号批量生成
+- 📦 自动生成 PCB 封装库：`.PcbLib`
+- 🧩 自动生成原理图库：`.SchLib`
+- 🏗️ 自动生成集成库工程：`.LibPkg`
+- 🔗 自动建立原理图符号与 PCB 封装的模型关联
+- ➕ 支持对已有库追加器件（不覆盖已有条目）
 
 ---
 
-## 效果预览
+## 👀 效果预览
 
 输入料号：
 
@@ -41,21 +43,21 @@ my_lib.LibPkg
 
 ---
 
-## 快速开始
+## ⚡ 快速开始
 
-### 1) 安装依赖
+### 1) 📥 安装依赖
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 2) 生成单个器件
+### 2) 🧪 生成单个器件
 
 ```bash
 python jlc2ad.py C15850 -o my_lib
 ```
 
-### 3) 生成多个器件
+### 3) 🧰 生成多个器件
 
 ```bash
 python jlc2ad.py C15850 C8291 C9652 -o my_lib
@@ -63,7 +65,7 @@ python jlc2ad.py C15850 C8291 C9652 -o my_lib
 
 ---
 
-## 命令说明
+## 🧭 命令说明
 
 ```text
 python jlc2ad.py <LCSC料号...> -o <输出名>
@@ -77,7 +79,7 @@ python jlc2ad.py C43314 C43317 C2990 -o power_lib
 
 ---
 
-## 项目结构
+## 🗂️ 项目结构
 
 ```text
 jlc2ad.py                  # 兼容入口（CLI）
@@ -96,7 +98,7 @@ requirements.txt           # Python 依赖
 
 ---
 
-## 生成后如何使用
+## 🛠️ 生成后如何使用
 
 1. 在 Altium Designer 打开 `xxx.LibPkg`
 2. 执行 `Project -> Compile Integrated Library`
@@ -104,24 +106,24 @@ requirements.txt           # Python 依赖
 
 ---
 
-## 常见问题
+## ❓ 常见问题
 
-### 1) 提示库文件损坏
+### 1) ⚠️ 提示库文件损坏
 
-- 确认项目根目录下模板文件存在：
+- 📌 确认项目根目录下模板文件存在：
   - `pcb_file_header.bin`
   - `pcb_library_params.txt`
   - `sch_file_header.bin`
   - `sch_storage.bin`
-- 建议换一个新的输出名重新生成（避免历史缓存影响）
+- 🔄 建议换一个新的输出名重新生成（避免历史缓存影响）
 
-### 2) 个别符号图形显示不完整
+### 2) 🧷 个别符号图形显示不完整
 
-- 记录具体 LCSC 料号并单独生成复现
-- EasyEDA 个别图元格式存在差异，后续可按料号持续增强解析规则
+- 🧾 记录具体 LCSC 料号并单独生成复现
+- 🧠 EasyEDA 个别图元格式存在差异，后续可按料号持续增强解析规则
 
 ---
 
-## 许可证
+## 📄 许可证
 
 本项目采用 MIT 许可证，详见 `LICENSE`。
