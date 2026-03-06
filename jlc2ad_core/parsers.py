@@ -418,8 +418,12 @@ class SchematicParser:
         width = max(1, int(round(float(p[4])))) if len(p) > 4 and p[4] else 1
 
         cx, cy = FootprintParser._svg_arc_center(sx, sy, rx, ry, 0, la, sw, ex, ey)
-        start_angle = math.degrees(math.atan2(sy - cy, sx - cx))
-        end_angle = math.degrees(math.atan2(ey - cy, ex - cx))
+        # Match footprint arc conversion: schematic Y axis is inverted in output,
+        # so angles must be converted with negated dy and sweep handling.
+        start_angle = math.degrees(math.atan2(-(sy - cy), sx - cx)) % 360
+        end_angle = math.degrees(math.atan2(-(ey - cy), ex - cx)) % 360
+        if sw == 1:
+            start_angle, end_angle = end_angle, start_angle
 
         return SchArc(
             cx=self._rx(cx, ox),

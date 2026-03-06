@@ -18,6 +18,11 @@ test *.PcbLib
 test *.SchLib
 test *.LibPkg
 
+# Local test scripts (keep local, do not commit)
+check*.py
+gen_big_test.py
+gen_tests.py
+
 # Backup/history artifacts
 History/
 *.Zip
