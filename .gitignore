@@ -12,6 +12,8 @@ my_lib.PcbLib
 my_lib.SchLib
 my_lib.LibPkg
 test_*.PcbLib
+test_*.SchLib
+test_*.LibPkg
 
 # Backup/history artifacts
 History/
