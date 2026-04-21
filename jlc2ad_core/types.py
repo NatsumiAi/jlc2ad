@@ -110,6 +110,20 @@ class Footprint:
     name: str = ""
     description: str = ""
     height: str = "0mil"
+    package: str = ""
+    value: str = ""
+    manufacturer: str = ""
+    manufacturer_part: str = ""
+    supplier_part: str = ""
+    supplier: str = "LCSC"
+    datasheet: str = ""
+    jlcpcb_part_class: str = ""
+    symbol_name: str = ""
+    lcsc_part_name: str = ""
+    model_3d_name: str = ""
+    model_3d_title: str = ""
+    model_3d_uuid: str = ""
+    model_3d_transform: str = ""
     pads: List[Pad] = field(default_factory=list)
     tracks: List[Track] = field(default_factory=list)
     arcs: List[Arc] = field(default_factory=list)
@@ -164,9 +178,18 @@ class SchSymbol:
     comment: str = ""  # 商品编号 (LCSC ID)
     package: str = ""  # 封装
     manufacturer: str = ""  # 厂商
+    manufacturer_part: str = ""  # 厂商型号
     value: str = ""  # 值
     supplier_part: str = ""  # 供应商型号
     supplier: str = "LCSC"  # 供应商
+    datasheet: str = ""
+    jlcpcb_part_class: str = ""
+    symbol_name: str = ""
+    lcsc_part_name: str = ""
+    model_3d_name: str = ""
+    model_3d_title: str = ""
+    model_3d_uuid: str = ""
+    model_3d_transform: str = ""
     pins: List[SchPin] = field(default_factory=list)
     lines: List[SchLine] = field(default_factory=list)
     rects: List[SchRect] = field(default_factory=list)
