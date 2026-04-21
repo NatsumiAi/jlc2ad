@@ -1,5 +1,6 @@
 from .footprint_shapes import ArcHandler, CircleHandler, FootprintParseContext, PadHandler, TrackHandler
 from .geometry import CoordinateTransformer, svg_arc_center
+from .model3d import enrich_model_urls, parse_3d_model_shape
 from .types import Footprint, UNIT_SCALE
 
 
@@ -31,6 +32,11 @@ class FootprintParser:
             parts = shape_str.split('~')
             shape_type = parts[0]
             try:
+                if shape_type == 'SVGNODE' and fp.model_3d is None:
+                    model = parse_3d_model_shape(shape_str)
+                    if model:
+                        fp.model_3d = enrich_model_urls(model)
+                    continue
                 if shape_type in self.single_handlers:
                     shape = self.single_handlers[shape_type].parse(parts, context)
                     if shape_type == 'PAD' and shape:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from typing import Any, Dict, Optional
 
 import requests
@@ -13,6 +14,8 @@ class EasyEDAClient:
     COMPONENT_URL = f"https://easyeda.com/api/products/{{}}/components?version={VERSION}"
     PRO_PRODUCT_SEARCH_URL = "https://pro.easyeda.com/api/v2/eda/product/search"
     PRO_DEVICE_SEARCH_URL = "https://pro.easyeda.com/api/v2/devices/search"
+    MODEL_STEP_URL = "https://modules.easyeda.com/qAxj6KHrDKw4blvCG8QJPs7Y/{uuid}"
+    MODEL_OBJ_URL = "https://modules.easyeda.com/3dmodel/{uuid}"
 
     def __init__(self, timeout: int = 60):
         self.timeout = timeout
@@ -209,6 +212,33 @@ class EasyEDAClient:
         if not isinstance(payload, dict):
             raise ValueError(f"Unexpected API payload from {url}")
         return payload
+
+    def download_3d_step(self, model_uuid: str, destination: str) -> str:
+        return self._download_binary(self.MODEL_STEP_URL.format(uuid=model_uuid), destination)
+
+    def download_3d_obj(self, model_uuid: str, destination: str) -> str:
+        return self._download_binary(self.MODEL_OBJ_URL.format(uuid=model_uuid), destination)
+
+    def fetch_3d_obj_text(self, model_uuid: str) -> str:
+        response = self.session.get(self.MODEL_OBJ_URL.format(uuid=model_uuid), timeout=self.timeout)
+        response.raise_for_status()
+        return response.text
+
+    def _download_binary(self, url: str, destination: str) -> str:
+        os.makedirs(os.path.dirname(destination), exist_ok=True)
+        last_error = None
+        for _ in range(3):
+            try:
+                with self.session.get(url, timeout=self.timeout, stream=True) as response:
+                    response.raise_for_status()
+                    with open(destination, 'wb') as file:
+                        for chunk in response.iter_content(chunk_size=65536):
+                            if chunk:
+                                file.write(chunk)
+                return destination
+            except Exception as exc:
+                last_error = exc
+        raise last_error
 
     @staticmethod
     def _extract_c_para(*sources: Any) -> Dict[str, Any]:

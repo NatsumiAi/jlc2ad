@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import List
+from typing import Dict, List
 
 LAYER_MAP = {
     1:  1,    # TopLayer
@@ -105,6 +105,77 @@ class Fill:
     rotation: float = 0.0
     layer: int = 1
 
+
+@dataclass
+class Model3D:
+    uuid: str = ""
+    name: str = ""
+    title: str = ""
+    path: str = ""
+    step_url: str = ""
+    obj_url: str = ""
+    translation_x: float = 0.0
+    translation_y: float = 0.0
+    translation_z: float = 0.0
+    translation_unit: str = "easyeda"
+    rotation_x: float = 0.0
+    rotation_y: float = 0.0
+    rotation_z: float = 0.0
+    rotation_unit: str = "degree"
+    width: float = 0.0
+    height: float = 0.0
+    size_unit: str = "easyeda"
+    raw_shape: str = ""
+    transform_raw: str = ""
+    transform: Dict[str, object] = field(default_factory=dict)
+    step_path: str = ""
+    obj_path: str = ""
+    obj_min_z: float = 0.0
+    obj_unit: str = "obj"
+    bbox_min_x: float = 0.0
+    bbox_min_y: float = 0.0
+    bbox_max_x: float = 0.0
+    bbox_max_y: float = 0.0
+    bbox_unit: str = "altium_internal"
+    footprint_center_x: float = 0.0
+    footprint_center_y: float = 0.0
+    altium_offset_x: float = 0.0
+    altium_offset_y: float = 0.0
+    altium_offset_z: float = 0.0
+    altium_offset_unit: str = "altium_internal"
+    footprint_center_x_mm: float = 0.0
+    footprint_center_y_mm: float = 0.0
+    bbox_min_x_mm: float = 0.0
+    bbox_min_y_mm: float = 0.0
+    bbox_max_x_mm: float = 0.0
+    bbox_max_y_mm: float = 0.0
+    translation_x_mm: float = 0.0
+    translation_y_mm: float = 0.0
+    translation_z_mm: float = 0.0
+    width_mm: float = 0.0
+    height_mm: float = 0.0
+    obj_min_z_mm: float = 0.0
+    node_bbox_min_x: float = 0.0
+    node_bbox_min_y: float = 0.0
+    node_bbox_max_x: float = 0.0
+    node_bbox_max_y: float = 0.0
+    node_center_x: float = 0.0
+    node_center_y: float = 0.0
+    node_bbox_width: float = 0.0
+    node_bbox_height: float = 0.0
+    inferred_scale_x: float = 0.0
+    inferred_scale_y: float = 0.0
+    inferred_scale: float = 0.0
+    placement_source: str = ""
+    recommended_rotation_source: str = ""
+    recommended_rotation_x: float = 0.0
+    recommended_rotation_y: float = 0.0
+    recommended_rotation_z: float = 0.0
+    placement_x_mm: float = 0.0
+    placement_y_mm: float = 0.0
+    placement_z_mm: float = 0.0
+    metadata_path: str = ""
+
 @dataclass
 class Footprint:
     name: str = ""
@@ -124,6 +195,7 @@ class Footprint:
     model_3d_title: str = ""
     model_3d_uuid: str = ""
     model_3d_transform: str = ""
+    model_3d: Model3D | None = None
     pads: List[Pad] = field(default_factory=list)
     tracks: List[Track] = field(default_factory=list)
     arcs: List[Arc] = field(default_factory=list)
