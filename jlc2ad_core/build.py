@@ -47,6 +47,7 @@ def build_libraries(
     output_name: str,
     log: Optional[LogFn] = None,
     progress: Optional[ProgressFn] = None,
+    existing: str = 'append',
 ) -> BuildResult:
     client = EasyEDAClient()
     fp_parser = FootprintParser()
@@ -61,6 +62,12 @@ def build_libraries(
     pcblib_path = base + '.PcbLib'
     schlib_path = base + '.SchLib'
     libpkg_path = base + '.LibPkg'
+    if existing not in ('append', 'overwrite', 'error'):
+        raise ValueError(f"Unknown existing-file policy: {existing}")
+    if existing == 'error':
+        existing_files = [path for path in (pcblib_path, schlib_path, libpkg_path) if os.path.exists(path)]
+        if existing_files:
+            raise ValueError(f"Output already exists: {', '.join(existing_files)}. Use --append or --force")
 
     footprints: List[Footprint] = []
     symbols: List[SchSymbol] = []
@@ -156,21 +163,23 @@ def build_libraries(
     if not footprints:
         raise ValueError("No components fetched")
 
-    if os.path.exists(pcblib_path):
+    if os.path.exists(pcblib_path) and existing == 'append':
         emit(f"\n{pcblib_path} exists, appending...")
         pcb_writer.append(pcblib_path, footprints)
     else:
-        emit(f"\nCreating {pcblib_path} ...")
+        action = 'Overwriting' if os.path.exists(pcblib_path) else 'Creating'
+        emit(f"\n{action} {pcblib_path} ...")
         pcb_writer.write(pcblib_path, footprints)
     emit(f"  {len(footprints)} footprint(s)")
     update_progress(0.8)
 
     if symbols:
-        if os.path.exists(schlib_path):
+        if os.path.exists(schlib_path) and existing == 'append':
             emit(f"\n{schlib_path} exists, appending...")
             sch_writer.append(schlib_path, symbols)
         else:
-            emit(f"\nCreating {schlib_path} ...")
+            action = 'Overwriting' if os.path.exists(schlib_path) else 'Creating'
+            emit(f"\n{action} {schlib_path} ...")
             sch_writer.write(schlib_path, symbols)
         emit(f"  {len(symbols)} symbol(s)")
 

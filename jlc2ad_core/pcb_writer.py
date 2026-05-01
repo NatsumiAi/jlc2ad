@@ -6,7 +6,7 @@ import zlib
 from typing import List
 
 from .cfb_writer import CfbWriter
-from .types import PCB_FLAGS_UNLOCKED, Arc, Fill, Footprint, Pad, Track
+from .types import PCB_FLAGS_UNLOCKED, Arc, Fill, Footprint, Pad, Region, Track
 from .writer_common import _get_file_header, _get_library_params, _safe_storage_name, _write_cstring_param_block, _write_string_block
 
 
@@ -101,6 +101,22 @@ class RecordPacker:
         record.extend(shape_record)
         return bytes(record)
 
+    def pack_region(self, region: Region) -> bytes:
+        body = bytearray()
+        body.extend(self._common_header(region.layer))
+        body.extend(struct.pack('<I', 0))
+        body.append(0)
+        body.extend(_write_cstring_param_block({}))
+        body.extend(struct.pack('<I', len(region.points)))
+        for x, y in region.points:
+            body.extend(struct.pack('<d', float(x)))
+            body.extend(struct.pack('<d', float(y)))
+
+        record = bytearray([0x0B])
+        record.extend(struct.pack('<I', len(body)))
+        record.extend(body)
+        return bytes(record)
+
     def pack_component_body(self, footprint: Footprint) -> bytes:
         model = getattr(footprint, 'model_3d', None)
         if not model or not model.step_path or not os.path.exists(model.step_path):
@@ -192,6 +208,18 @@ class RecordPacker:
 
 
 class PcbLibWriter:
+    ROOT_STORAGES = {'FileHeader', 'Library', 'FileVersionInfo', 'SectionKeys'}
+    COMPONENT_STREAM_PREFIXES = (
+        'Data',
+        'Header',
+        'Parameters',
+        'WideStrings',
+        'UniqueIdPrimitiveInformation/',
+        'PrimitiveGuids/',
+        'LayerToLayerMapping',
+        'ExtendedPrimitiveInformation/',
+    )
+
     def __init__(self):
         self.packer = RecordPacker()
 
@@ -236,9 +264,14 @@ class PcbLibWriter:
             buf.extend(_write_string_block(storage_name))
         return bytes(buf)
 
-    def _build_models_streams(self, footprints: List[Footprint], existing_raw: dict = None) -> tuple[bytes, bytes, List[bytes]]:
-        data_stream = bytearray()
-        model_payloads = []
+    def _build_models_streams(
+        self,
+        footprints: List[Footprint],
+        existing_models_data: bytes = b'',
+        existing_model_payloads: List[bytes] = None,
+    ) -> tuple[bytes, bytes, List[bytes]]:
+        data_stream = bytearray(existing_models_data or b'')
+        model_payloads = list(existing_model_payloads or [])
 
         for footprint in footprints:
             model = getattr(footprint, 'model_3d', None)
@@ -278,6 +311,8 @@ class PcbLibWriter:
             buf.extend(self.packer.pack_arc(arc))
         for fill in footprint.fills:
             buf.extend(self.packer.pack_fill(fill))
+        for region in footprint.regions:
+            buf.extend(self.packer.pack_region(region))
         body_record = self.packer.pack_component_body(footprint)
         if body_record:
             buf.extend(body_record)
@@ -286,7 +321,7 @@ class PcbLibWriter:
     @staticmethod
     def _build_header(footprint: Footprint) -> bytes:
         body_count = 1 if getattr(footprint, 'model_3d', None) and footprint.model_3d.step_path else 0
-        return struct.pack('<I', len(footprint.pads) + len(footprint.tracks) + len(footprint.arcs) + len(footprint.fills) + body_count)
+        return struct.pack('<I', len(footprint.pads) + len(footprint.tracks) + len(footprint.arcs) + len(footprint.fills) + len(footprint.regions) + body_count)
 
     @staticmethod
     def _build_parameters(footprint: Footprint, storage_name: str) -> bytes:
@@ -350,6 +385,9 @@ class PcbLibWriter:
         for _ in footprint.fills:
             buf.extend(PcbLibWriter._primitive_info_record(index, 'Region'))
             index += 1
+        for _ in footprint.regions:
+            buf.extend(PcbLibWriter._primitive_info_record(index, 'Region'))
+            index += 1
         if getattr(footprint, 'model_3d', None) and footprint.model_3d.step_path:
             buf.extend(PcbLibWriter._primitive_info_record(index, 'ComponentBody'))
         return bytes(buf)
@@ -379,18 +417,35 @@ class PcbLibWriter:
         for fill in footprint.fills:
             xs.extend([fill.x1, fill.x2])
             ys.extend([fill.y1, fill.y2])
+        for region in footprint.regions:
+            for x, y in region.points:
+                xs.append(x)
+                ys.append(y)
         if not xs or not ys:
             return None
         return min(xs), min(ys), max(xs), max(ys)
 
-    def _build_cfb(self, footprints: List[Footprint], storage_names: List[str], filename: str = '', existing_raw: dict = None) -> CfbWriter:
+    def _build_cfb(
+        self,
+        footprints: List[Footprint],
+        storage_names: List[str],
+        filename: str = '',
+        existing_raw: dict = None,
+        existing_models_data: bytes = b'',
+        existing_model_payloads: List[bytes] = None,
+        existing_library_streams: dict = None,
+    ) -> CfbWriter:
         cfb = CfbWriter()
         cfb.add_stream('FileHeader', self._make_file_header())
 
         all_storage_names = list((existing_raw or {}).keys()) + storage_names
         cfb.add_stream('Library/Header', struct.pack('<I', 1))
         cfb.add_stream('Library/Data', self._make_library_data(all_storage_names, filename))
-        models_header, models_data, model_payloads = self._build_models_streams(footprints, existing_raw)
+        models_header, models_data, model_payloads = self._build_models_streams(
+            footprints,
+            existing_models_data=existing_models_data,
+            existing_model_payloads=existing_model_payloads,
+        )
         cfb.add_stream('Library/Models/Header', models_header)
         if model_payloads:
             cfb.add_stream('Library/Models/Data', models_data)
@@ -398,10 +453,11 @@ class PcbLibWriter:
                 cfb.add_stream(f'Library/Models/{index}', payload)
         else:
             cfb.add_stream('Library/Models/Data', b'')
-        cfb.add_stream('Library/Textures/Header', struct.pack('<I', 0))
-        cfb.add_stream('Library/Textures/Data', b'')
-        cfb.add_stream('Library/ModelsNoEmbed/Header', struct.pack('<I', 0))
-        cfb.add_stream('Library/ModelsNoEmbed/Data', b'')
+        library_streams = existing_library_streams or {}
+        cfb.add_stream('Library/Textures/Header', library_streams.get('Textures/Header', struct.pack('<I', 0)))
+        cfb.add_stream('Library/Textures/Data', library_streams.get('Textures/Data', b''))
+        cfb.add_stream('Library/ModelsNoEmbed/Header', library_streams.get('ModelsNoEmbed/Header', struct.pack('<I', 0)))
+        cfb.add_stream('Library/ModelsNoEmbed/Data', library_streams.get('ModelsNoEmbed/Data', b''))
 
         if existing_raw:
             for storage_name, streams in existing_raw.items():
@@ -430,32 +486,117 @@ class PcbLibWriter:
 
         existing_raw = {}
         existing_names = set()
+        existing_part_ids = set()
+        existing_models_data = b''
+        existing_model_payloads = []
+        existing_library_streams = {}
 
         if os.path.exists(filename):
             ole = olefile.OleFileIO(filename)
             for entry in ole.listdir(storages=True):
-                if len(entry) == 1 and entry[0] not in ('FileHeader', 'Library', 'FileVersionInfo', 'SectionKeys'):
+                if len(entry) == 1 and entry[0] not in self.ROOT_STORAGES:
                     existing_names.add(entry[0])
             for name in existing_names:
                 existing_raw[name] = {}
-                for stream_name in ('Data', 'Header', 'Parameters', 'WideStrings'):
-                    try:
-                        existing_raw[name][stream_name] = ole.openstream(f'{name}/{stream_name}').read()
-                    except Exception:
-                        pass
+                prefix = f'{name}/'
+                for entry in ole.listdir(streams=True):
+                    path = '/'.join(entry)
+                    if not path.startswith(prefix):
+                        continue
+                    stream_name = path[len(prefix):]
+                    if self._should_preserve_component_stream(stream_name):
+                        existing_raw[name][stream_name] = ole.openstream(path).read()
+                existing_part_ids.update(self._extract_part_ids(existing_raw[name].get('Parameters', b'')))
+
+            try:
+                existing_models_data = ole.openstream('Library/Models/Data').read()
+            except Exception:
+                existing_models_data = b''
+            model_count = self._read_existing_model_count(ole)
+            for index in range(model_count):
+                try:
+                    existing_model_payloads.append(ole.openstream(f'Library/Models/{index}').read())
+                except Exception:
+                    break
+            for stream_name in ('Textures/Header', 'Textures/Data', 'ModelsNoEmbed/Header', 'ModelsNoEmbed/Data'):
+                try:
+                    existing_library_streams[stream_name] = ole.openstream(f'Library/{stream_name}').read()
+                except Exception:
+                    pass
             ole.close()
 
         new_footprints = []
         new_storage_names = []
         for footprint in footprints:
             storage_name = self._safe_name(footprint.name)
+            part_id = self._normalized_part_id(getattr(footprint, 'supplier_part', ''))
+            if part_id and part_id in existing_part_ids:
+                print(f'  Skipping existing part: {part_id}')
+                continue
             if storage_name in existing_names:
                 print(f'  Skipping existing: {storage_name}')
                 continue
             new_footprints.append(footprint)
             new_storage_names.append(storage_name)
 
-        self._build_cfb(new_footprints, new_storage_names, filename, existing_raw).save(filename)
+        self._build_cfb(
+            new_footprints,
+            new_storage_names,
+            filename,
+            existing_raw,
+            existing_models_data=existing_models_data,
+            existing_model_payloads=existing_model_payloads,
+            existing_library_streams=existing_library_streams,
+        ).save(filename)
+
+    @classmethod
+    def _should_preserve_component_stream(cls, stream_name: str) -> bool:
+        return any(stream_name == prefix or stream_name.startswith(prefix) for prefix in cls.COMPONENT_STREAM_PREFIXES)
+
+    @staticmethod
+    def _read_existing_model_count(ole) -> int:
+        try:
+            data = ole.openstream('Library/Models/Header').read(4)
+            if len(data) == 4:
+                return struct.unpack('<I', data)[0]
+        except Exception:
+            pass
+        count = 0
+        while True:
+            try:
+                ole.openstream(f'Library/Models/{count}').close()
+            except Exception:
+                return count
+            count += 1
+
+    @classmethod
+    def _extract_part_ids(cls, data: bytes) -> set:
+        text = data.decode('gbk', errors='ignore')
+        found = set()
+        for key in ('Supplier Part', 'LCSC Part'):
+            value = cls._extract_param_value(text, key)
+            normalized = cls._normalized_part_id(value)
+            if normalized:
+                found.add(normalized)
+        return found
+
+    @staticmethod
+    def _extract_param_value(text: str, key: str) -> str:
+        marker = f'|{key}='
+        start = text.find(marker)
+        if start < 0:
+            return ''
+        start += len(marker)
+        end = text.find('|', start)
+        if end < 0:
+            end = len(text)
+        return text[start:end].strip('\x00 ').upper()
+
+    @staticmethod
+    def _normalized_part_id(value: str) -> str:
+        value = (value or '').strip().upper()
+        match = re.search(r'\bC\d+\b', value)
+        return match.group(0) if match else ''
 
 
 __all__ = ['RecordPacker', 'PcbLibWriter']

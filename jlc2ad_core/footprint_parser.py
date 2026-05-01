@@ -1,4 +1,4 @@
-from .footprint_shapes import ArcHandler, CircleHandler, FootprintParseContext, PadHandler, TrackHandler
+from .footprint_shapes import ArcHandler, CircleHandler, FillHandler, FootprintParseContext, PadHandler, PolyHandler, RectHandler, TrackHandler
 from .geometry import CoordinateTransformer, svg_arc_center
 from .model3d import enrich_model_urls, parse_3d_model_shape
 from .types import Footprint, UNIT_SCALE
@@ -14,7 +14,10 @@ class FootprintParser:
         }
         self.multi_handlers = {
             'TRACK': TrackHandler(),
+            'RECT': RectHandler(),
+            'FILL': FillHandler(),
         }
+        self.poly_handler = PolyHandler()
 
     def parse(self, component_data: dict) -> Footprint:
         pkg_data = component_data.get('dataStr', {})
@@ -40,11 +43,24 @@ class FootprintParser:
                 if shape_type in self.single_handlers:
                     shape = self.single_handlers[shape_type].parse(parts, context)
                     if shape_type == 'PAD' and shape:
-                        fp.pads.append(shape)
+                        if isinstance(shape, tuple):
+                            pad, regions = shape
+                            fp.pads.append(pad)
+                            fp.regions.extend(regions)
+                        else:
+                            fp.pads.append(shape)
                     elif shape:
                         fp.arcs.append(shape)
                 elif shape_type in self.multi_handlers:
-                    fp.tracks.extend(self.multi_handlers[shape_type].parse(parts, context))
+                    parsed = self.multi_handlers[shape_type].parse(parts, context)
+                    if shape_type == 'FILL':
+                        fp.regions.extend(parsed)
+                    else:
+                        fp.tracks.extend(parsed)
+                elif shape_type == 'POLY':
+                    tracks, arcs = self.poly_handler.parse(parts, context)
+                    fp.tracks.extend(tracks)
+                    fp.arcs.extend(arcs)
             except Exception as exc:
                 print(f"  Warning: parse {shape_type} failed: {exc}")
                 continue

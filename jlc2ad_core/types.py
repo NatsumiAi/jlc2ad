@@ -107,6 +107,12 @@ class Fill:
 
 
 @dataclass
+class Region:
+    points: List[tuple[int, int]] = field(default_factory=list)
+    layer: int = 33
+
+
+@dataclass
 class Model3D:
     uuid: str = ""
     name: str = ""
@@ -202,6 +208,7 @@ class Footprint:
     tracks: List[Track] = field(default_factory=list)
     arcs: List[Arc] = field(default_factory=list)
     fills: List[Fill] = field(default_factory=list)
+    regions: List[Region] = field(default_factory=list)
 
 
 # ============================================================

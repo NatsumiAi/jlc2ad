@@ -12,18 +12,24 @@ def main():
                     help='Output base name, e.g. "my_lib" -> my_lib.SchLib + my_lib.PcbLib + my_lib.LibPkg')
     ap.add_argument('--3d-debug', action='store_true',
                     help='Only download and analyze 3D models into artifacts/, without generating Altium library files')
+    mode = ap.add_mutually_exclusive_group()
+    mode.add_argument('--append', action='store_true',
+                      help='Append to existing output libraries')
+    mode.add_argument('--force', action='store_true',
+                      help='Overwrite existing output libraries')
     args = ap.parse_args()
 
     try:
-        if args.__dict__['3d_debug']:
+        if getattr(args, '3d_debug'):
             result = debug_3d_models(args.parts, args.output, log=print)
         else:
-            result = build_libraries(args.parts, args.output, log=print)
+            existing = 'append' if args.append else 'overwrite' if args.force else 'error'
+            result = build_libraries(args.parts, args.output, log=print, existing=existing)
     except ValueError as exc:
         print(f"{exc}. Exiting.")
         sys.exit(1)
 
-    if args.__dict__['3d_debug']:
+    if getattr(args, '3d_debug'):
         print(f"\n3D debug output:")
         print(f"  {result.output_dir}")
         print(f"  {len(result.footprints)} model(s)")

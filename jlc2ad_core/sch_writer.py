@@ -84,7 +84,7 @@ class SchLibWriter:
             'RECORD': '1',
             'LibReference': storage_name,
             'ComponentDescription': component_desc,
-            'PartCount': '2',
+            'PartCount': '1',
             'DisplayModeCount': '1',
             'IndexInSheet': '-1',
             'OwnerPartId': '-1',
@@ -296,6 +296,7 @@ class SchLibWriter:
 
         existing_raw = {}
         existing_names = set()
+        existing_part_ids = set()
 
         if os.path.exists(filename):
             ole = olefile.OleFileIO(filename)
@@ -309,12 +310,17 @@ class SchLibWriter:
                         existing_raw[name][stream_name] = ole.openstream(f'{name}/{stream_name}').read()
                     except Exception:
                         pass
+                existing_part_ids.update(self._extract_part_ids(existing_raw[name].get('Data', b'')))
             ole.close()
 
         new_symbols = []
         new_storage_names = []
         for symbol in symbols:
             storage_name = self._safe_name(symbol.name)
+            part_id = self._normalized_part_id(getattr(symbol, 'supplier_part', ''))
+            if part_id and part_id in existing_part_ids:
+                print(f'  Skipping existing symbol part: {part_id}')
+                continue
             if storage_name in existing_names:
                 print(f'  Skipping existing symbol: {storage_name}')
                 continue
@@ -322,6 +328,48 @@ class SchLibWriter:
             new_storage_names.append(storage_name)
 
         self._build_cfb(new_symbols, new_storage_names, existing_raw).save(filename)
+
+    @classmethod
+    def _extract_part_ids(cls, data: bytes) -> set:
+        text = data.decode('gbk', errors='ignore')
+        found = set()
+        for key in ('Supplier Part', 'LCSC Part'):
+            value = cls._extract_param_value(text, key)
+            normalized = cls._normalized_part_id(value)
+            if normalized:
+                found.add(normalized)
+        return found
+
+    @staticmethod
+    def _extract_param_value(text: str, key: str) -> str:
+        marker = f'|Name={key}'
+        start = text.find(marker)
+        if start < 0:
+            marker = f'|{key}='
+            start = text.find(marker)
+            if start < 0:
+                return ''
+            start += len(marker)
+            end = text.find('|', start)
+            if end < 0:
+                end = len(text)
+            return text[start:end].strip('\x00 ').upper()
+
+        text_marker = '|Text='
+        text_start = text.find(text_marker, start)
+        if text_start < 0:
+            return ''
+        text_start += len(text_marker)
+        end = text.find('|', text_start)
+        if end < 0:
+            end = len(text)
+        return text[text_start:end].strip('\x00 ').upper()
+
+    @staticmethod
+    def _normalized_part_id(value: str) -> str:
+        value = (value or '').strip().upper()
+        match = re.search(r'\bC\d+\b', value)
+        return match.group(0) if match else ''
 
 
 __all__ = ['SchLibWriter']
