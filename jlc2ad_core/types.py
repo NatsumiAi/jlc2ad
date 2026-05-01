@@ -131,6 +131,8 @@ class Model3D:
     step_path: str = ""
     obj_path: str = ""
     obj_min_z: float = 0.0
+    obj_max_z: float = 0.0
+    obj_height_mm: float = 0.0
     obj_unit: str = "obj"
     bbox_min_x: float = 0.0
     bbox_min_y: float = 0.0

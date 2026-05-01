@@ -66,7 +66,13 @@ def enrich_model_urls(model: Model3D) -> Model3D:
 
 
 def parse_obj_min_z(text: str) -> float:
+    min_z, _, _ = parse_obj_z_bounds(text)
+    return min_z
+
+
+def parse_obj_z_bounds(text: str) -> tuple[float, float, float]:
     min_z = None
+    max_z = None
     for raw_line in text.splitlines():
         line = raw_line.strip()
         if not line.startswith('v '):
@@ -79,7 +85,10 @@ def parse_obj_min_z(text: str) -> float:
         except ValueError:
             continue
         min_z = z if min_z is None else min(min_z, z)
-    return 0.0 if min_z is None else min_z
+        max_z = z if max_z is None else max(max_z, z)
+    if min_z is None or max_z is None:
+        return 0.0, 0.0, 0.0
+    return min_z, max_z, max_z - min_z
 
 
 def apply_footprint_placement(model: Model3D, footprint: Footprint) -> Model3D:
@@ -138,6 +147,8 @@ def apply_footprint_placement(model: Model3D, footprint: Footprint) -> Model3D:
     model.width_mm = transform_size_x or (model.width * inferred_scale)
     model.height_mm = transform_size_y or (model.height * inferred_scale)
     model.obj_min_z_mm = model.obj_min_z
+    if model.obj_height_mm:
+        model.height_mm = model.obj_height_mm
 
     if transform_size_x or transform_size_y:
         model.placement_source = 'transform_offset'
@@ -382,5 +393,6 @@ __all__ = [
     'model_output_dir',
     'parse_3d_model_shape',
     'parse_obj_min_z',
+    'parse_obj_z_bounds',
     'save_model_metadata',
 ]

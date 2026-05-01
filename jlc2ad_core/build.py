@@ -5,7 +5,7 @@ from typing import Callable, List, Optional
 from .easyeda_api import EasyEDAClient
 from .footprint_parser import FootprintParser
 from .libpkg_writer import LibPkgWriter
-from .model3d import apply_footprint_placement, model_output_dir, parse_obj_min_z, save_model_metadata
+from .model3d import apply_footprint_placement, model_output_dir, parse_obj_z_bounds, save_model_metadata
 from .pcb_writer import PcbLibWriter
 from .sch_writer import SchLibWriter
 from .schematic_parser import SchematicParser
@@ -118,7 +118,7 @@ def build_libraries(
                 fp.model_3d.step_path = step_path
                 fp.model_3d.obj_path = obj_path
                 with open(obj_path, 'r', encoding='utf-8', errors='replace') as obj_file:
-                    fp.model_3d.obj_min_z = parse_obj_min_z(obj_file.read())
+                    fp.model_3d.obj_min_z, fp.model_3d.obj_max_z, fp.model_3d.obj_height_mm = parse_obj_z_bounds(obj_file.read())
                 apply_footprint_placement(fp.model_3d, fp)
                 fp.model_3d.metadata_path = save_model_metadata(fp.model_3d, models_dir, pid, fp.name)
                 emit(f"  3D: downloaded {os.path.basename(step_path)} + {os.path.basename(obj_path)}")
@@ -237,7 +237,7 @@ def debug_3d_models(
             fp.model_3d.obj_path = obj_path
 
             with open(obj_path, 'r', encoding='utf-8', errors='replace') as obj_file:
-                fp.model_3d.obj_min_z = parse_obj_min_z(obj_file.read())
+                fp.model_3d.obj_min_z, fp.model_3d.obj_max_z, fp.model_3d.obj_height_mm = parse_obj_z_bounds(obj_file.read())
 
             apply_footprint_placement(fp.model_3d, fp)
             fp.model_3d.metadata_path = save_model_metadata(fp.model_3d, models_dir, pid, fp.name)
