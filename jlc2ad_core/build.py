@@ -5,9 +5,11 @@ from typing import Callable, List, Optional
 from .easyeda_api import EasyEDAClient
 from .footprint_parser import FootprintParser
 from .libpkg_writer import LibPkgWriter
+from .model3d import apply_footprint_placement, model_output_dir, parse_obj_z_bounds, save_model_metadata
 from .pcb_writer import PcbLibWriter
 from .sch_writer import SchLibWriter
 from .schematic_parser import SchematicParser
+from .writer_common import _safe_storage_name
 from .types import Footprint, SchSymbol
 
 
@@ -25,6 +27,13 @@ class BuildResult:
     symbols: List[SchSymbol]
 
 
+@dataclass
+class Model3DDebugResult:
+    base_name: str
+    output_dir: str
+    footprints: List[Footprint]
+
+
 def normalize_output_base(output_name: str) -> str:
     base = output_name.strip()
     for ext in ('.PcbLib', '.SchLib', '.LibPkg', '.IntLib'):
@@ -38,6 +47,7 @@ def build_libraries(
     output_name: str,
     log: Optional[LogFn] = None,
     progress: Optional[ProgressFn] = None,
+    existing: str = 'append',
 ) -> BuildResult:
     client = EasyEDAClient()
     fp_parser = FootprintParser()
@@ -46,13 +56,23 @@ def build_libraries(
     sch_writer = SchLibWriter()
 
     base = normalize_output_base(output_name)
+    output_dir = os.path.dirname(base)
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
     pcblib_path = base + '.PcbLib'
     schlib_path = base + '.SchLib'
     libpkg_path = base + '.LibPkg'
+    if existing not in ('append', 'overwrite', 'error'):
+        raise ValueError(f"Unknown existing-file policy: {existing}")
+    if existing == 'error':
+        existing_files = [path for path in (pcblib_path, schlib_path, libpkg_path) if os.path.exists(path)]
+        if existing_files:
+            raise ValueError(f"Output already exists: {', '.join(existing_files)}. Use --append or --force")
 
     footprints: List[Footprint] = []
     symbols: List[SchSymbol] = []
     total = len(parts)
+    models_dir = model_output_dir(base)
 
     def emit(message: str):
         if log:
@@ -85,7 +105,30 @@ def build_libraries(
             fp.model_3d_title = data.get('model_3d', {}).get('3D Model Title', '')
             fp.model_3d_uuid = data.get('model_3d', {}).get('3D Model UUID', '') or data.get('model_3d', {}).get('uuid', '')
             fp.model_3d_transform = data.get('model_3d', {}).get('transform_raw', '')
+            if fp.model_3d:
+                fp.model_3d.transform = data.get('model_3d', {}).get('transform', {}) or fp.model_3d.transform
+                if fp.model_3d_transform:
+                    fp.model_3d.transform_raw = fp.model_3d_transform
             emit(f"  PCB: {len(fp.pads)} pads, {len(fp.tracks)} tracks, {len(fp.arcs)} arcs")
+            if fp.model_3d and fp.model_3d.uuid:
+                fp.model_3d_name = fp.model_3d.name or fp.model_3d_name
+                fp.model_3d_title = fp.model_3d.title or fp.model_3d_title
+                fp.model_3d_uuid = fp.model_3d.uuid or fp.model_3d_uuid
+                fp.model_3d.transform = data.get('model_3d', {}).get('transform', {}) or fp.model_3d.transform
+                if fp.model_3d.transform_raw:
+                    fp.model_3d_transform = fp.model_3d.transform_raw
+                safe_asset = _safe_storage_name(f"{pid}_{fp.name}_{fp.model_3d.uuid}")
+                step_path = os.path.join(models_dir, safe_asset + '.step')
+                obj_path = os.path.join(models_dir, safe_asset + '.obj')
+                client.download_3d_step(fp.model_3d.uuid, step_path)
+                client.download_3d_obj(fp.model_3d.uuid, obj_path)
+                fp.model_3d.step_path = step_path
+                fp.model_3d.obj_path = obj_path
+                with open(obj_path, 'r', encoding='utf-8', errors='replace') as obj_file:
+                    fp.model_3d.obj_min_z, fp.model_3d.obj_max_z, fp.model_3d.obj_height_mm = parse_obj_z_bounds(obj_file.read())
+                apply_footprint_placement(fp.model_3d, fp)
+                fp.model_3d.metadata_path = save_model_metadata(fp.model_3d, models_dir, pid, fp.name)
+                emit(f"  3D: downloaded {os.path.basename(step_path)} + {os.path.basename(obj_path)}")
             footprints.append(fp)
 
             sym = sch_parser.parse(data)
@@ -120,21 +163,23 @@ def build_libraries(
     if not footprints:
         raise ValueError("No components fetched")
 
-    if os.path.exists(pcblib_path):
+    if os.path.exists(pcblib_path) and existing == 'append':
         emit(f"\n{pcblib_path} exists, appending...")
         pcb_writer.append(pcblib_path, footprints)
     else:
-        emit(f"\nCreating {pcblib_path} ...")
+        action = 'Overwriting' if os.path.exists(pcblib_path) else 'Creating'
+        emit(f"\n{action} {pcblib_path} ...")
         pcb_writer.write(pcblib_path, footprints)
     emit(f"  {len(footprints)} footprint(s)")
     update_progress(0.8)
 
     if symbols:
-        if os.path.exists(schlib_path):
+        if os.path.exists(schlib_path) and existing == 'append':
             emit(f"\n{schlib_path} exists, appending...")
             sch_writer.append(schlib_path, symbols)
         else:
-            emit(f"\nCreating {schlib_path} ...")
+            action = 'Overwriting' if os.path.exists(schlib_path) else 'Creating'
+            emit(f"\n{action} {schlib_path} ...")
             sch_writer.write(schlib_path, symbols)
         emit(f"  {len(symbols)} symbol(s)")
 
@@ -152,4 +197,78 @@ def build_libraries(
     )
 
 
-__all__ = ["BuildResult", "build_libraries", "normalize_output_base"]
+def debug_3d_models(
+    parts: List[str],
+    output_name: str,
+    log: Optional[LogFn] = None,
+    progress: Optional[ProgressFn] = None,
+) -> Model3DDebugResult:
+    client = EasyEDAClient()
+    fp_parser = FootprintParser()
+
+    base = normalize_output_base(output_name)
+    footprints: List[Footprint] = []
+    total = len(parts)
+    models_dir = model_output_dir(base)
+
+    def emit(message: str):
+        if log:
+            log(message)
+
+    def update_progress(value: float):
+        if progress:
+            progress(value)
+
+    for index, pid in enumerate(parts):
+        emit(f"Fetching {pid} ...")
+        try:
+            data = client.fetch(pid)
+            emit(f"  Component: {data['title']} ({data['package_name']})")
+            fp = fp_parser.parse(data)
+            if not fp.model_3d or not fp.model_3d.uuid:
+                emit("  3D: no model data, skipping")
+                continue
+
+            fp.model_3d_name = fp.model_3d.name or data.get('model_3d', {}).get('3D Model Name', '')
+            fp.model_3d_title = fp.model_3d.title or data.get('model_3d', {}).get('3D Model Title', '')
+            fp.model_3d_uuid = fp.model_3d.uuid
+            fp.model_3d_transform = data.get('model_3d', {}).get('transform_raw', '')
+            fp.model_3d.transform = data.get('model_3d', {}).get('transform', {}) or fp.model_3d.transform
+            if fp.model_3d_transform:
+                fp.model_3d.transform_raw = fp.model_3d_transform
+
+            safe_asset = _safe_storage_name(f"{pid}_{fp.name}_{fp.model_3d.uuid}")
+            step_path = os.path.join(models_dir, safe_asset + '.step')
+            obj_path = os.path.join(models_dir, safe_asset + '.obj')
+            client.download_3d_step(fp.model_3d.uuid, step_path)
+            client.download_3d_obj(fp.model_3d.uuid, obj_path)
+            fp.model_3d.step_path = step_path
+            fp.model_3d.obj_path = obj_path
+
+            with open(obj_path, 'r', encoding='utf-8', errors='replace') as obj_file:
+                fp.model_3d.obj_min_z, fp.model_3d.obj_max_z, fp.model_3d.obj_height_mm = parse_obj_z_bounds(obj_file.read())
+
+            apply_footprint_placement(fp.model_3d, fp)
+            fp.model_3d.metadata_path = save_model_metadata(fp.model_3d, models_dir, pid, fp.name)
+            emit(f"  3D: downloaded {os.path.basename(step_path)} + {os.path.basename(obj_path)}")
+            emit(
+                f"  3D placement: {fp.model_3d.placement_source} "
+                f"x={fp.model_3d.placement_x_mm:.3f}mm "
+                f"y={fp.model_3d.placement_y_mm:.3f}mm "
+                f"z={fp.model_3d.placement_z_mm:.3f}mm"
+            )
+            footprints.append(fp)
+        except Exception as exc:
+            emit(f"  Error: {exc}")
+            continue
+
+        if total:
+            update_progress((index + 1) / total)
+
+    if not footprints:
+        raise ValueError("No 3D models fetched")
+
+    return Model3DDebugResult(base_name=base, output_dir=models_dir, footprints=footprints)
+
+
+__all__ = ["BuildResult", "Model3DDebugResult", "build_libraries", "debug_3d_models", "normalize_output_base"]

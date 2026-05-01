@@ -1,13 +1,14 @@
 from typing import Optional
 
-from ..types import EASYEDA_PAD_SHAPE, LAYER_MAP, PAD_SHAPE_RECT, Pad
+from ..types import EASYEDA_PAD_SHAPE, LAYER_MAP, PAD_SHAPE_RECT, PAD_SHAPE_ROUND, Pad, Region
 from .context import FootprintParseContext
+from .path import parse_path_points, parse_shape_payload
 
 
 class PadHandler:
     shape_type = 'PAD'
 
-    def parse(self, parts, context: FootprintParseContext) -> Optional[Pad]:
+    def parse(self, parts, context: FootprintParseContext) -> Optional[Pad] | tuple[Pad, list[Region]]:
         shape_name = parts[1]
         cx, cy = float(parts[2]), float(parts[3])
         width, height = float(parts[4]), float(parts[5])
@@ -24,6 +25,27 @@ class PadHandler:
         if hole_r > 0 and easyeda_layer != 11:
             layer = 74
 
+        custom_points = self._custom_polygon_points(shape_name, parts)
+        if hole_r <= 0 and custom_points:
+            hotspot_size = context.size(2.3792)
+            pad = Pad(
+                x=context.x(cx),
+                y=context.y(cy),
+                size_x=hotspot_size,
+                size_y=hotspot_size,
+                hole_size=0,
+                shape=PAD_SHAPE_ROUND,
+                rotation=0.0,
+                layer=layer,
+                name=pad_number,
+                plated=plated,
+            )
+            points = custom_points[:]
+            if points[0] != points[-1]:
+                points.append(points[0])
+            region = Region(points=[(context.x(x), context.y(y)) for x, y in points], layer=layer)
+            return pad, [region]
+
         return Pad(
             x=context.x(cx),
             y=context.y(cy),
@@ -36,6 +58,21 @@ class PadHandler:
             name=pad_number,
             plated=plated,
         )
+
+    @staticmethod
+    def _custom_polygon_points(shape_name: str, parts) -> list[tuple[float, float]]:
+        if 'POLY' not in (shape_name or '').upper():
+            return []
+        for part in parts:
+            payload = parse_shape_payload(part)
+            points = parse_path_points(payload)
+            if len(points) >= 3:
+                return points
+            if isinstance(payload, list) and len(payload) >= 2 and isinstance(payload[0], str) and payload[0].upper() == 'POLY':
+                points = parse_path_points(payload[1])
+                if len(points) >= 3:
+                    return points
+        return []
 
 
 __all__ = ['PadHandler']

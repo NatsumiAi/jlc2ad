@@ -5,9 +5,12 @@ __pycache__/
 
 # Local tool/editor state
 .claude/
+artifacts/
+tests/
 opencode.json
 
 # Generated outputs
+smoke_3d/
 *.PcbLib
 *.SchLib
 *.LibPkg

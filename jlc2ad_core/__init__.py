@@ -1,4 +1,4 @@
-from .build import BuildResult, build_libraries, normalize_output_base
+from .build import BuildResult, Model3DDebugResult, build_libraries, debug_3d_models, normalize_output_base
 from .cli import main
 from .easyeda_api import EasyEDAClient
 from .footprint_parser import FootprintParser
@@ -12,7 +12,9 @@ from .writers import CfbWriter, _safe_storage_name, _write_cstring_param_block, 
 __all__ = [
     "main",
     "BuildResult",
+    "Model3DDebugResult",
     "build_libraries",
+    "debug_3d_models",
     "normalize_output_base",
     "EasyEDAClient",
     "FootprintParser",
